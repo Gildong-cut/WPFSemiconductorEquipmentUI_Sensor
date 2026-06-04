@@ -43,6 +43,10 @@
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="System.Net.Http" />
+    <Reference Include="System.Data.SQLite">
+      <HintPath>Lib\System.Data.SQLite.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System.Xaml">
       <RequiredTargetFramework>4.0</RequiredTargetFramework>
     </Reference>
@@ -121,9 +125,11 @@
     <Compile Include="Models\ActivityLogItem.cs" />
     <Compile Include="Models\NavigationItem.cs" />
     <Compile Include="Models\SensorMetric.cs" />
+    <Compile Include="Models\UserAccount.cs" />
     <Compile Include="Services\AdsSensorTrainerClient.cs" />
     <Compile Include="Services\ITrainerClient.cs" />
     <Compile Include="Services\SensorTrainerSnapshot.cs" />
+    <Compile Include="Services\UserAccountRepository.cs" />
     <Compile Include="ViewModels\ConsoleViewModel.cs" />
     <Compile Include="ViewModels\LoginViewModel.cs" />
     <Compile Include="ViewModels\LogsViewModel.cs" />
@@ -175,7 +181,16 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="Lib\System.Data.SQLite.dll" />
     <None Include="Lib\TwinCAT.Ads.dll" />
+    <Content Include="Lib\x64\SQLite.Interop.dll">
+      <Link>x64\SQLite.Interop.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Lib\x86\SQLite.Interop.dll">
+      <Link>x86\SQLite.Interop.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

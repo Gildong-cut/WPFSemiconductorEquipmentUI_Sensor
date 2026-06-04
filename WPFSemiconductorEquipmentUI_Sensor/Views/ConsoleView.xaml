@@ -45,11 +45,11 @@
             <Border Style="{StaticResource CardBorderStyle}">
                 <StackPanel>
                     <TextBlock Text="Operator &amp; System" Style="{StaticResource SectionTitleText}" />
-                    <DockPanel Margin="0,22,0,0"><TextBlock Text="User State" Style="{StaticResource BodyStrongText}" /><controls:StatusBadge DockPanel.Dock="Right" Text="APPROVED" Tone="Normal" Width="100" HorizontalAlignment="Right" /></DockPanel>
-                    <DockPanel Margin="0,22,0,0"><TextBlock Text="Role" Style="{StaticResource BodyStrongText}" /><controls:StatusBadge DockPanel.Dock="Right" Text="Operator" Tone="Blue" Width="100" HorizontalAlignment="Right" /></DockPanel>
+                    <DockPanel Margin="0,22,0,0"><TextBlock Text="User State" Style="{StaticResource BodyStrongText}" /><controls:StatusBadge DockPanel.Dock="Right" Text="{Binding UserStateText}" Tone="{Binding UserStateTone}" Width="112" HorizontalAlignment="Right" /></DockPanel>
+                    <DockPanel Margin="0,22,0,0"><TextBlock Text="User ID" Style="{StaticResource BodyStrongText}" /><controls:StatusBadge DockPanel.Dock="Right" Text="{Binding CurrentUserText}" Tone="Blue" Width="112" HorizontalAlignment="Right" /></DockPanel>
                     <DockPanel Margin="0,22,0,0"><TextBlock Text="DB" Style="{StaticResource BodyStrongText}" /><controls:StatusBadge DockPanel.Dock="Right" Text="CONNECTED" Tone="Normal" Width="100" HorizontalAlignment="Right" /></DockPanel>
                     <DockPanel Margin="0,22,0,0"><TextBlock Text="EtherCAT" Style="{StaticResource BodyStrongText}" /><controls:StatusBadge DockPanel.Dock="Right" Text="{Binding EtherCatStatusText}" Tone="{Binding EtherCatStatusTone}" Width="112" HorizontalAlignment="Right" /></DockPanel>
-                    <DockPanel Margin="0,22,0,0"><TextBlock Text="Control" Style="{StaticResource BodyStrongText}" /><controls:StatusBadge DockPanel.Dock="Right" Text="ENABLED" Tone="Normal" Width="100" HorizontalAlignment="Right" /></DockPanel>
+                    <DockPanel Margin="0,22,0,0"><TextBlock Text="Control" Style="{StaticResource BodyStrongText}" /><controls:StatusBadge DockPanel.Dock="Right" Text="{Binding ControlAccessText}" Tone="{Binding ControlAccessTone}" Width="100" HorizontalAlignment="Right" /></DockPanel>
                     <Border Height="1" Margin="0,24,0,14" Background="{StaticResource BrushBorder}" />
                     <TextBlock Text="Digital Inputs" Style="{StaticResource SectionTitleText}" />
                     <DockPanel Margin="0,14,0,0"><TextBlock Text="DI 1" Style="{StaticResource BodyStrongText}" /><controls:StatusBadge DockPanel.Dock="Right" Text="{Binding DigitalInput1Text}" Tone="{Binding DigitalInput1Tone}" Width="72" HorizontalAlignment="Right" /></DockPanel>
@@ -116,10 +116,43 @@
             <Border Grid.Column="4" Style="{StaticResource CardBorderStyle}">
                 <StackPanel>
                     <TextBlock Text="Equipment Control" Style="{StaticResource SectionTitleText}" />
-                    <Button Content="START" Style="{StaticResource PrimaryButtonStyle}" Margin="0,18,0,0" />
-                    <Button Content="STOP" Style="{StaticResource SecondaryButtonStyle}" Margin="0,12,0,0" />
-                    <Button Content="LOCKED" Style="{StaticResource DisabledButtonStyle}" Margin="0,12,0,0" />
-                    <Border Margin="0,16,0,0" Padding="14" CornerRadius="8" Background="{StaticResource BrushDangerSoft}" BorderBrush="#F2B8B5" BorderThickness="1">
+                    <Button Content="{Binding StartButtonText}" Command="{Binding StartCommand}" Margin="0,18,0,0">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsControlEnabled}" Value="False">
+                                        <Setter Property="Background" Value="{StaticResource BrushDisabledSoft}" />
+                                        <Setter Property="Foreground" Value="{StaticResource BrushDisabled}" />
+                                        <Setter Property="BorderBrush" Value="{StaticResource BrushDisabledSoft}" />
+                                        <Setter Property="Cursor" Value="Arrow" />
+                                        <Setter Property="IsEnabled" Value="False" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Content="{Binding StopButtonText}" Command="{Binding StopCommand}" Margin="0,12,0,0">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource SecondaryButtonStyle}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsControlEnabled}" Value="False">
+                                        <Setter Property="Background" Value="{StaticResource BrushDisabledSoft}" />
+                                        <Setter Property="Foreground" Value="{StaticResource BrushDisabled}" />
+                                        <Setter Property="BorderBrush" Value="{StaticResource BrushDisabledSoft}" />
+                                        <Setter Property="Cursor" Value="Arrow" />
+                                        <Setter Property="IsEnabled" Value="False" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Border Margin="0,16,0,0"
+                            Padding="14"
+                            CornerRadius="8"
+                            Background="{StaticResource BrushDangerSoft}"
+                            BorderBrush="#F2B8B5"
+                            BorderThickness="1"
+                            Visibility="{Binding IsEmergencyVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <StackPanel>
                             <TextBlock Text="Emergency" Foreground="{StaticResource BrushDanger}" FontWeight="SemiBold" />
                             <Button Content="FORCE SHUTDOWN" Style="{StaticResource DangerButtonStyle}" Margin="0,10,0,0" />

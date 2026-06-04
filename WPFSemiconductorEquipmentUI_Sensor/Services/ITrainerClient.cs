@@ -11,5 +11,7 @@ namespace WPFSemiconductorEquipmentUI_Sensor.Services
         SensorTrainerSnapshot ReadSnapshot();
 
         void SetRunningLamp(bool isOn);
+
+        void DisableAllDigitalOutputs();
     }
 }

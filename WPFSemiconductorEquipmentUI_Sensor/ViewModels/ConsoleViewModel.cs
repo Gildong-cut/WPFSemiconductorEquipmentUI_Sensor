@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System;
 using System.Runtime.CompilerServices;
+using System.Windows.Input;
 using System.Windows.Threading;
 using WPFSemiconductorEquipmentUI_Sensor.Models;
 using WPFSemiconductorEquipmentUI_Sensor.Services;
@@ -15,6 +16,7 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
         private readonly DispatcherTimer _pollingTimer;
         private bool _disposed;
         private bool _isReading;
+        private bool _runningLampIsOn;
         private int _successfulReadCount;
         private int _unchangedReadCount;
         private bool _hasLastRawSnapshot;
@@ -42,6 +44,15 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
         private string _opticalSensorTone;
         private string _inductiveSensorText;
         private string _inductiveSensorTone;
+        private bool _isControlEnabled;
+        private string _userStateText;
+        private string _userStateTone;
+        private string _currentUserText;
+        private string _controlAccessText;
+        private string _controlAccessTone;
+        private string _equipmentControlStateText;
+        private string _equipmentControlStateTone;
+        private bool _isEmergencyVisible;
 
         public ConsoleViewModel()
             : this(new AdsSensorTrainerClient())
@@ -74,6 +85,17 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             SummaryTone = "Disabled";
             SummaryText = "Waiting for TwinCAT ADS connection. Last known sensor values will remain visible if reads fail.";
             SetDigitalInputs(false, false, false, false, false, false);
+            UserStateText = "NOT LOGGED IN";
+            UserStateTone = "Disabled";
+            CurrentUserText = "Guest";
+            ControlAccessText = "LOCKED";
+            ControlAccessTone = "Disabled";
+            EquipmentControlStateText = "LOCKED";
+            EquipmentControlStateTone = "Disabled";
+            IsEmergencyVisible = false;
+
+            StartCommand = new RelayCommand(StartEquipment, parameter => IsControlEnabled);
+            StopCommand = new RelayCommand(StopEquipment, parameter => IsControlEnabled);
 
             _pollingTimer = new DispatcherTimer(DispatcherPriority.Background)
             {
@@ -85,6 +107,84 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
 
         public ObservableCollection<SensorMetric> Sensors { get; private set; }
         public ObservableCollection<ActivityLogItem> ActivityLogs { get; private set; }
+        public ICommand StartCommand { get; private set; }
+        public ICommand StopCommand { get; private set; }
+
+        public bool IsControlEnabled
+        {
+            get { return _isControlEnabled; }
+            private set
+            {
+                if (_isControlEnabled == value)
+                {
+                    return;
+                }
+
+                _isControlEnabled = value;
+                OnPropertyChanged();
+                OnPropertyChanged("StartButtonText");
+                OnPropertyChanged("StopButtonText");
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        public string StartButtonText
+        {
+            get { return IsControlEnabled ? "START" : "LOCKED"; }
+        }
+
+        public string StopButtonText
+        {
+            get { return IsControlEnabled ? "STOP" : "LOCKED"; }
+        }
+
+        public string UserStateText
+        {
+            get { return _userStateText; }
+            private set { SetProperty(ref _userStateText, value); }
+        }
+
+        public string UserStateTone
+        {
+            get { return _userStateTone; }
+            private set { SetProperty(ref _userStateTone, value); }
+        }
+
+        public string CurrentUserText
+        {
+            get { return _currentUserText; }
+            private set { SetProperty(ref _currentUserText, value); }
+        }
+
+        public string ControlAccessText
+        {
+            get { return _controlAccessText; }
+            private set { SetProperty(ref _controlAccessText, value); }
+        }
+
+        public string ControlAccessTone
+        {
+            get { return _controlAccessTone; }
+            private set { SetProperty(ref _controlAccessTone, value); }
+        }
+
+        public string EquipmentControlStateText
+        {
+            get { return _equipmentControlStateText; }
+            private set { SetProperty(ref _equipmentControlStateText, value); }
+        }
+
+        public string EquipmentControlStateTone
+        {
+            get { return _equipmentControlStateTone; }
+            private set { SetProperty(ref _equipmentControlStateTone, value); }
+        }
+
+        public bool IsEmergencyVisible
+        {
+            get { return _isEmergencyVisible; }
+            private set { SetProperty(ref _isEmergencyVisible, value); }
+        }
 
         public string ConnectionStatusText
         {
@@ -216,12 +316,16 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             _disposed = true;
             _pollingTimer.Stop();
             _pollingTimer.Tick -= OnPollingTimerTick;
-            TrySetRunningLampOff();
             _trainerClient.Dispose();
         }
 
         private void TrySetRunningLampOff()
         {
+            if (!_runningLampIsOn)
+            {
+                return;
+            }
+
             try
             {
                 _trainerClient.SetRunningLamp(false);
@@ -229,6 +333,43 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             catch
             {
             }
+            finally
+            {
+                _runningLampIsOn = false;
+            }
+        }
+
+        private void TrySetRunningLampOn()
+        {
+            if (_runningLampIsOn)
+            {
+                return;
+            }
+
+            _trainerClient.SetRunningLamp(true);
+            _runningLampIsOn = true;
+        }
+
+        public void SetUserAccess(UserAccount account)
+        {
+            CurrentUserText = account.UserId;
+            var isApproved = string.Equals(account.ApprovalStatus, "Approved", StringComparison.OrdinalIgnoreCase);
+
+            IsControlEnabled = isApproved;
+            UserStateText = isApproved ? "APPROVED" : "PENDING";
+            UserStateTone = isApproved ? "Normal" : "Warning";
+            ControlAccessText = isApproved ? "ENABLED" : "LOCKED";
+            ControlAccessTone = isApproved ? "Normal" : "Disabled";
+            IsEmergencyVisible = isApproved;
+
+            if (isApproved)
+            {
+                return;
+            }
+
+            TryDisableAllDigitalOutputs();
+            EquipmentControlStateText = "LOCKED";
+            EquipmentControlStateTone = "Disabled";
         }
 
         private void OnPollingTimerTick(object sender, EventArgs e)
@@ -242,14 +383,28 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             try
             {
                 var snapshot = _trainerClient.ReadSnapshot();
+
+                if (!IsControlEnabled)
+                {
+                    TryDisableAllDigitalOutputs();
+                }
+
                 if (IsStaleSnapshot(snapshot))
                 {
-                    TrySetRunningLampOff();
+                    if (IsControlEnabled)
+                    {
+                        TrySetRunningLampOff();
+                    }
+
                     ApplyStaleSnapshot(snapshot);
                 }
                 else
                 {
-                    _trainerClient.SetRunningLamp(true);
+                    if (IsControlEnabled)
+                    {
+                        TrySetRunningLampOn();
+                    }
+
                     ApplySnapshot(snapshot);
                 }
             }
@@ -262,6 +417,105 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             {
                 _isReading = false;
             }
+        }
+
+        private void TryDisableAllDigitalOutputs()
+        {
+            try
+            {
+                _trainerClient.DisableAllDigitalOutputs();
+            }
+            catch
+            {
+            }
+            finally
+            {
+                _runningLampIsOn = false;
+            }
+        }
+
+        private void ClearEquipmentData()
+        {
+            foreach (var sensor in Sensors)
+            {
+                sensor.Value = "--";
+                sensor.RangeText = "Access locked";
+                sensor.BadgeText = "LOCKED";
+                sensor.Tone = "Disabled";
+                sensor.IndicatorWidth = 0d;
+            }
+
+            SetDigitalInputsLocked();
+            ResetStaleDetection();
+            ConnectionStatusText = "ACCESS LOCKED";
+            ConnectionStatusTone = "Disabled";
+            LastUpdateText = "NO SENSOR ACCESS";
+            EtherCatStatusText = "LOCKED";
+            EtherCatStatusTone = "Disabled";
+            SummaryBadgeText = "LOCKED";
+            SummaryTone = "Disabled";
+            SummaryText = "This account is not approved. Sensor reads, digital input monitoring, and equipment controls are disabled.";
+        }
+
+        private void ResetStaleDetection()
+        {
+            _unchangedReadCount = 0;
+            _hasLastRawSnapshot = false;
+        }
+
+        private void SetDigitalInputsLocked()
+        {
+            SetDigitalStatusLocked(out _digitalInput1Text, out _digitalInput1Tone, "DigitalInput1Text", "DigitalInput1Tone");
+            SetDigitalStatusLocked(out _digitalInput2Text, out _digitalInput2Tone, "DigitalInput2Text", "DigitalInput2Tone");
+            SetDigitalStatusLocked(out _digitalInput3Text, out _digitalInput3Tone, "DigitalInput3Text", "DigitalInput3Tone");
+            SetDigitalStatusLocked(out _digitalInput4Text, out _digitalInput4Tone, "DigitalInput4Text", "DigitalInput4Tone");
+            SetDigitalStatusLocked(out _opticalSensorText, out _opticalSensorTone, "OpticalSensorText", "OpticalSensorTone");
+            SetDigitalStatusLocked(out _inductiveSensorText, out _inductiveSensorTone, "InductiveSensorText", "InductiveSensorTone");
+        }
+
+        private void SetDigitalStatusLocked(out string textField, out string toneField, string textPropertyName, string tonePropertyName)
+        {
+            textField = "LOCKED";
+            toneField = "Disabled";
+            OnPropertyChanged(textPropertyName);
+            OnPropertyChanged(tonePropertyName);
+        }
+
+        private void StartEquipment(object parameter)
+        {
+            if (!IsControlEnabled)
+            {
+                return;
+            }
+
+            EquipmentControlStateText = "STARTED";
+            EquipmentControlStateTone = "Normal";
+            AddControlLog("START command");
+        }
+
+        private void StopEquipment(object parameter)
+        {
+            if (!IsControlEnabled)
+            {
+                return;
+            }
+
+            EquipmentControlStateText = "STOPPED";
+            EquipmentControlStateTone = "Warning";
+            AddControlLog("STOP command");
+        }
+
+        private void AddControlLog(string eventText)
+        {
+            ActivityLogs.Insert(0, new ActivityLogItem
+            {
+                Time = DateTime.Now.ToString("HH:mm:ss"),
+                Source = "Control",
+                User = CurrentUserText,
+                Event = eventText,
+                Severity = "INFO",
+                Saved = "NO"
+            });
         }
 
         private bool IsStaleSnapshot(SensorTrainerSnapshot snapshot)

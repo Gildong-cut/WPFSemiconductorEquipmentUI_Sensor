@@ -9,7 +9,7 @@
                 <TextBlock Text="{Binding Description}" Style="{StaticResource BodyText}" />
             </StackPanel>
             <StackPanel  DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                <controls:StatusBadge Text="DB CONNECTED" Tone="Normal" Margin="0,0,8,0" />
+                <controls:StatusBadge Text="SQLite READY" Tone="Normal" Margin="0,0,8,0" />
                 <controls:StatusBadge Text="AUTH FLOW" Tone="Blue" />
             </StackPanel>
         </DockPanel>
@@ -58,11 +58,16 @@
                     <TextBlock Text="User ID" Margin="0,18,0,6" Style="{StaticResource CaptionText}" />
                     <TextBox Text="{Binding UserId}" />
                     <TextBlock Text="Password" Margin="0,14,0,6" Style="{StaticResource CaptionText}" />
-                    <PasswordBox Height="40" Padding="12,0" VerticalContentAlignment="Center" />
+                    <PasswordBox x:Name="PasswordInput" Height="40" Padding="12,0" VerticalContentAlignment="Center" Password="1" />
                     <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
-                        <Button Content="LOGIN" Style="{StaticResource PrimaryButtonStyle}" Width="160" />
-                        <Button Content="SIGN UP" Style="{StaticResource SecondaryButtonStyle}" Width="160" Margin="12,0,0,0" />
+                        <Button Content="LOGIN" Style="{StaticResource PrimaryButtonStyle}" Width="160" Click="LoginButton_Click" />
+                        <Button Content="SIGN UP" Style="{StaticResource SecondaryButtonStyle}" Width="160" Margin="12,0,0,0" Click="SignUpButton_Click" />
                     </StackPanel>
+                    <Border Margin="0,18,0,0" Padding="16" CornerRadius="8" Background="{StaticResource BrushSurfaceSubtle}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1">
+                        <StackPanel>
+                            <controls:StatusBadge Text="{Binding LoginStatusText}" Tone="{Binding LoginStatusTone}" HorizontalAlignment="Left" TextAlignment="Left" />
+                        </StackPanel>
+                    </Border>
                     <Border Margin="0,18,0,0" Padding="16" CornerRadius="8" Background="{StaticResource BrushWarningSoft}" BorderBrush="#E7C26A" BorderThickness="1">
                         <StackPanel>
                             <TextBlock Text="Pending approval" Foreground="{StaticResource BrushWarning}" FontWeight="SemiBold" />

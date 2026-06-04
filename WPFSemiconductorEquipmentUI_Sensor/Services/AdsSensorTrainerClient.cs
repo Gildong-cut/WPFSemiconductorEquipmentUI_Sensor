@@ -96,6 +96,28 @@ namespace WPFSemiconductorEquipmentUI_Sensor.Services
             }
         }
 
+        public void DisableAllDigitalOutputs()
+        {
+            ThrowIfDisposed();
+
+            using (var adsClient = new TcAdsClient())
+            {
+                var digitalOutputHandle = 0;
+
+                try
+                {
+                    adsClient.Timeout = AdsTimeoutMilliseconds;
+                    adsClient.Connect(DefaultAdsPort);
+                    digitalOutputHandle = adsClient.CreateVariableHandle(DigitalOutputVariable);
+                    adsClient.WriteAny(digitalOutputHandle, new DigitalOutputRaw { Bits = 0 });
+                }
+                finally
+                {
+                    TryDeleteHandle(adsClient, digitalOutputHandle);
+                }
+            }
+        }
+
         public void Dispose()
         {
             _disposed = true;
