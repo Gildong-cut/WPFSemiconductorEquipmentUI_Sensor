@@ -6,6 +6,7 @@ namespace WPFSemiconductorEquipmentUI_Sensor.Models
     public class NavigationItem : INotifyPropertyChanged
     {
         private bool _isSelected;
+        private bool _isEnabled = true;
 
         public string Title { get; set; }
         public object ViewModel { get; set; }
@@ -16,6 +17,16 @@ namespace WPFSemiconductorEquipmentUI_Sensor.Models
             set
             {
                 _isSelected = value;
+                OnPropertyChanged();
+            }
+        }
+
+        public bool IsEnabled
+        {
+            get { return _isEnabled; }
+            set
+            {
+                _isEnabled = value;
                 OnPropertyChanged();
             }
         }

@@ -18,6 +18,7 @@ namespace WPFSemiconductorEquipmentUI_Sensor
         {
             base.OnStartup(e);
             new UserAccountRepository().Initialize();
+            ActivityLogStore.Instance.Initialize();
         }
     }
 }

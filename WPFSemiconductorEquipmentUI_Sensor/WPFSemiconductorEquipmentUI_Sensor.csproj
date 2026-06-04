@@ -127,6 +127,7 @@
     <Compile Include="Models\SensorMetric.cs" />
     <Compile Include="Models\UserAccount.cs" />
     <Compile Include="Services\AdsSensorTrainerClient.cs" />
+    <Compile Include="Services\ActivityLogStore.cs" />
     <Compile Include="Services\ITrainerClient.cs" />
     <Compile Include="Services\SensorTrainerSnapshot.cs" />
     <Compile Include="Services\UserAccountRepository.cs" />

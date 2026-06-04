@@ -23,7 +23,7 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             Description = "Only approved operators can enter the equipment control console.";
             UserId = "test1";
             Department = "Process Equipment";
-            LoginStatusText = "Try test1 / 1 or test2 / 1.";
+            LoginStatusText = "Try admin / 1, test1 / 1, or test2 / 1.";
             LoginStatusTone = "Blue";
         }
 
@@ -74,20 +74,32 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             {
                 LoginStatusText = "Login failed. Check user ID and password.";
                 LoginStatusTone = "Danger";
+                ActivityLogStore.Instance.Add("Auth", UserId, "Login failed", "WARN");
                 return;
             }
 
             Department = account.Department;
+            if (account.Role == "Admin")
+            {
+                LoginStatusText = "Administrator login: " + account.UserId + " has full equipment access.";
+                LoginStatusTone = "Normal";
+                ActivityLogStore.Instance.Add("Auth", account.UserId, "Administrator login successful", "INFO");
+                RaiseLoginSucceeded(account);
+                return;
+            }
+
             if (account.ApprovalStatus == "Approved")
             {
                 LoginStatusText = "Approved login: " + account.UserId + " can access equipment controls.";
                 LoginStatusTone = "Normal";
+                ActivityLogStore.Instance.Add("Auth", account.UserId, "Approved user login successful", "INFO");
                 RaiseLoginSucceeded(account);
                 return;
             }
 
             LoginStatusText = "Pending approval: " + account.UserId + " is saved in SQLite but cannot use controls yet.";
             LoginStatusTone = "Warning";
+            ActivityLogStore.Instance.Add("Auth", account.UserId, "Pending user login successful with controls locked", "WARN");
             RaiseLoginSucceeded(account);
         }
 
@@ -103,6 +115,7 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             _repository.AddOrUpdateUser(UserId, password, Department, "Pending");
             LoginStatusText = "Pending account saved: " + UserId + ".";
             LoginStatusTone = "Warning";
+            ActivityLogStore.Instance.Add("Auth", UserId, "New pending account registered", "INFO");
         }
 
         private void RaiseLoginSucceeded(UserAccount account)

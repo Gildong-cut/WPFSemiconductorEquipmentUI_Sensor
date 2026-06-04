@@ -87,14 +87,16 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <Border Grid.Row="2" Style="{StaticResource CardBorderStyle}" Padding="0">
+                <Border Grid.Row="2"
+                        Style="{StaticResource CardBorderStyle}"
+                        Padding="0">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="50" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <DockPanel Margin="10,0">
-                            <TextBlock Text="Activity Log" Style="{StaticResource SectionTitleText}" VerticalAlignment="Center" />
+                            <TextBlock Text="Live Sensor Changes" Style="{StaticResource SectionTitleText}" VerticalAlignment="Center" />
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8">
                                 <controls:StatusBadge Text="ALL" Tone="Blue" Margin="0,0,8,0" />
                                 <controls:StatusBadge Text="WARN" Tone="Warning" Margin="0,0,8,0" />

@@ -12,6 +12,10 @@ namespace WPFSemiconductorEquipmentUI_Sensor.Services
 
         void SetRunningLamp(bool isOn);
 
+        void SetWarningOutputs(bool warningOn, bool riskOn);
+
         void DisableAllDigitalOutputs();
+
+        void DisableOperatorRestrictedOutputs();
     }
 }

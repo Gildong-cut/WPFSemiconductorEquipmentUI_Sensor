@@ -49,6 +49,10 @@
                 <DataTrigger Binding="{Binding IsSelected}" Value="True">
                     <Setter Property="Background" Value="{StaticResource BrushAccentSoft}" />
                 </DataTrigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45" />
+                    <Setter Property="Cursor" Value="Arrow" />
+                </Trigger>
             </Style.Triggers>
         </Style>
     </Window.Resources>
@@ -86,6 +90,7 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Button Style="{StaticResource NavigationButtonStyle}"
+                                        IsEnabled="{Binding IsEnabled}"
                                         Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                         CommandParameter="{Binding}"
                                         Margin="0,0,0,8">

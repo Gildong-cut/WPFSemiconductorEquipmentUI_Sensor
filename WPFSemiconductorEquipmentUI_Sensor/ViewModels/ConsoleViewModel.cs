@@ -11,19 +11,28 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
     public class ConsoleViewModel : ScreenViewModelBase, IDisposable
     {
         private const int StaleReadThreshold = 6;
-
         private readonly ITrainerClient _trainerClient;
+        private readonly SettingsViewModel _settings;
         private readonly DispatcherTimer _pollingTimer;
         private bool _disposed;
         private bool _isReading;
         private bool _runningLampIsOn;
+        private bool _hasWarningOutputState;
+        private bool _warningOutputIsOn;
+        private bool _riskOutputIsOn;
         private int _successfulReadCount;
         private int _unchangedReadCount;
         private bool _hasLastRawSnapshot;
+        private bool _hasLastLoggedSensorSnapshot;
+        private DateTime _lastSensorLogAt = DateTime.MinValue;
         private short _lastPressureRaw;
         private short _lastVibrationRaw;
         private short _lastTemperatureRaw;
         private short _lastHumidityRaw;
+        private short _lastLoggedPressureRaw;
+        private short _lastLoggedVibrationRaw;
+        private short _lastLoggedTemperatureRaw;
+        private short _lastLoggedHumidityRaw;
         private string _connectionStatusText;
         private string _connectionStatusTone;
         private string _lastUpdateText;
@@ -45,6 +54,7 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
         private string _inductiveSensorText;
         private string _inductiveSensorTone;
         private bool _isControlEnabled;
+        private bool _isAdmin;
         private string _userStateText;
         private string _userStateTone;
         private string _currentUserText;
@@ -55,13 +65,14 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
         private bool _isEmergencyVisible;
 
         public ConsoleViewModel()
-            : this(new AdsSensorTrainerClient())
+            : this(new AdsSensorTrainerClient(), new SettingsViewModel())
         {
         }
 
-        public ConsoleViewModel(ITrainerClient trainerClient)
+        public ConsoleViewModel(ITrainerClient trainerClient, SettingsViewModel settings)
         {
             _trainerClient = trainerClient;
+            _settings = settings;
 
             Title = "WPF Equipment Control Console";
             Description = "Desktop interface for field control, sensor review, and activity monitoring.";
@@ -74,7 +85,7 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
                 new SensorMetric { Name = "Humidity", Value = "--", Unit = "%", RangeText = "Raw: --", BadgeText = "WAIT", Tone = "Disabled", IndicatorWidth = 0 }
             };
 
-            ActivityLogs = SampleData.CreateLogs();
+            ActivityLogs = ActivityLogStore.Instance.SensorLogs;
 
             ConnectionStatusText = "DISCONNECTED";
             ConnectionStatusTone = "Disabled";
@@ -184,6 +195,11 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
         {
             get { return _isEmergencyVisible; }
             private set { SetProperty(ref _isEmergencyVisible, value); }
+        }
+
+        public bool IsAdmin
+        {
+            get { return _isAdmin; }
         }
 
         public string ConnectionStatusText
@@ -353,21 +369,29 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
         public void SetUserAccess(UserAccount account)
         {
             CurrentUserText = account.UserId;
-            var isApproved = string.Equals(account.ApprovalStatus, "Approved", StringComparison.OrdinalIgnoreCase);
+            _isAdmin = string.Equals(account.Role, "Admin", StringComparison.OrdinalIgnoreCase);
+            OnPropertyChanged("IsAdmin");
+            var isApproved = _isAdmin || string.Equals(account.ApprovalStatus, "Approved", StringComparison.OrdinalIgnoreCase);
 
             IsControlEnabled = isApproved;
-            UserStateText = isApproved ? "APPROVED" : "PENDING";
+            UserStateText = _isAdmin ? "ADMIN" : isApproved ? "APPROVED" : "PENDING";
             UserStateTone = isApproved ? "Normal" : "Warning";
             ControlAccessText = isApproved ? "ENABLED" : "LOCKED";
             ControlAccessTone = isApproved ? "Normal" : "Disabled";
-            IsEmergencyVisible = isApproved;
+            IsEmergencyVisible = _isAdmin;
 
             if (isApproved)
             {
+                if (_isAdmin)
+                {
+                    return;
+                }
+
+                SetOperatorDigitalInputsLocked();
                 return;
             }
 
-            TryDisableAllDigitalOutputs();
+            SetDigitalInputsLocked();
             EquipmentControlStateText = "LOCKED";
             EquipmentControlStateTone = "Disabled";
         }
@@ -384,33 +408,23 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             {
                 var snapshot = _trainerClient.ReadSnapshot();
 
-                if (!IsControlEnabled)
-                {
-                    TryDisableAllDigitalOutputs();
-                }
-
                 if (IsStaleSnapshot(snapshot))
                 {
-                    if (IsControlEnabled)
-                    {
-                        TrySetRunningLampOff();
-                    }
-
+                    TrySetRunningLampOff();
+                    TrySetWarningOutputs(false, false);
                     ApplyStaleSnapshot(snapshot);
                 }
                 else
                 {
-                    if (IsControlEnabled)
-                    {
-                        TrySetRunningLampOn();
-                    }
-
+                    TrySetRunningLampOn();
                     ApplySnapshot(snapshot);
+                    ApplyWarningState(snapshot);
                 }
             }
             catch (Exception ex)
             {
                 TrySetRunningLampOff();
+                TrySetWarningOutputs(false, false);
                 ApplyReadFailure(ex);
             }
             finally
@@ -431,6 +445,64 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             finally
             {
                 _runningLampIsOn = false;
+            }
+        }
+
+        private void ApplyWarningState(SensorTrainerSnapshot snapshot)
+        {
+            var pressureWarning = CalibratePressure(snapshot.Pressure) > _settings.PressureWarningThreshold;
+            var vibrationWarning = CalibrateVibration(snapshot.Vibration) > _settings.VibrationWarningThreshold;
+            var temperatureWarning = CalibrateTemperature(snapshot.Temperature) > _settings.TemperatureWarningThreshold;
+            var humidityWarning = CalibrateHumidity(snapshot.Humidity) > _settings.HumidityWarningThreshold;
+
+            SetSensorWarning(Sensors[0], pressureWarning);
+            SetSensorWarning(Sensors[1], vibrationWarning);
+            SetSensorWarning(Sensors[2], temperatureWarning);
+            SetSensorWarning(Sensors[3], humidityWarning);
+
+            var warningCount = (pressureWarning ? 1 : 0)
+                + (vibrationWarning ? 1 : 0)
+                + (temperatureWarning ? 1 : 0)
+                + (humidityWarning ? 1 : 0);
+
+            TrySetWarningOutputs(warningCount >= 1, warningCount >= 2);
+        }
+
+        private void TrySetWarningOutputs(bool warningOn, bool riskOn)
+        {
+            if (_hasWarningOutputState
+                && _warningOutputIsOn == warningOn
+                && _riskOutputIsOn == riskOn)
+            {
+                return;
+            }
+
+            try
+            {
+                _trainerClient.SetWarningOutputs(warningOn, riskOn);
+                _warningOutputIsOn = warningOn;
+                _riskOutputIsOn = riskOn;
+                _hasWarningOutputState = true;
+            }
+            catch
+            {
+            }
+        }
+
+        private static void SetSensorWarning(SensorMetric sensor, bool isWarning)
+        {
+            sensor.BadgeText = isWarning ? "WARNING" : "LIVE";
+            sensor.Tone = isWarning ? "Warning" : "Normal";
+        }
+
+        private void TryDisableOperatorRestrictedOutputs()
+        {
+            try
+            {
+                _trainerClient.DisableOperatorRestrictedOutputs();
+            }
+            catch
+            {
             }
         }
 
@@ -507,15 +579,7 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
 
         private void AddControlLog(string eventText)
         {
-            ActivityLogs.Insert(0, new ActivityLogItem
-            {
-                Time = DateTime.Now.ToString("HH:mm:ss"),
-                Source = "Control",
-                User = CurrentUserText,
-                Event = eventText,
-                Severity = "INFO",
-                Saved = "NO"
-            });
+            ActivityLogStore.Instance.Add("Control", CurrentUserText, eventText, "INFO");
         }
 
         private bool IsStaleSnapshot(SensorTrainerSnapshot snapshot)
@@ -565,13 +629,8 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             UpdateSensor(Sensors[2], snapshot.Temperature, CalibrateTemperature, "0.0", 0d, 60d);
             UpdateSensor(Sensors[3], snapshot.Humidity, CalibrateHumidity, "0.0", 0d, 100d);
 
-            SetDigitalInputs(
-                snapshot.DigitalInput1,
-                snapshot.DigitalInput2,
-                snapshot.DigitalInput3,
-                snapshot.DigitalInput4,
-                snapshot.OpticalSensor,
-                snapshot.InductiveSensor);
+            ApplyDigitalInputAccess(snapshot);
+            LogSensorChange(snapshot);
 
             ConnectionStatusText = "ADS READ OK";
             ConnectionStatusTone = "Normal";
@@ -581,6 +640,40 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             SummaryBadgeText = "PLC LINK";
             SummaryTone = "Normal";
             SummaryText = "TwinCAT ADS is readable. Sensor power state is not verified; displayed values are the latest PLC raw inputs from GVL.NX_AD4203.";
+        }
+
+        private void LogSensorChange(SensorTrainerSnapshot snapshot)
+        {
+            var changed = !_hasLastLoggedSensorSnapshot
+                || _lastLoggedPressureRaw != snapshot.Pressure
+                || _lastLoggedVibrationRaw != snapshot.Vibration
+                || _lastLoggedTemperatureRaw != snapshot.Temperature
+                || _lastLoggedHumidityRaw != snapshot.Humidity;
+
+            if (!changed || DateTime.Now - _lastSensorLogAt < TimeSpan.FromSeconds(1))
+            {
+                return;
+            }
+
+            _lastLoggedPressureRaw = snapshot.Pressure;
+            _lastLoggedVibrationRaw = snapshot.Vibration;
+            _lastLoggedTemperatureRaw = snapshot.Temperature;
+            _lastLoggedHumidityRaw = snapshot.Humidity;
+            _hasLastLoggedSensorSnapshot = true;
+            _lastSensorLogAt = DateTime.Now;
+
+            var eventText = string.Format(
+                "P {0:0.00} bar ({1}), V {2:0.0} level ({3}), T {4:0.0} C ({5}), H {6:0.0}% ({7})",
+                CalibratePressure(snapshot.Pressure),
+                snapshot.Pressure,
+                CalibrateVibration(snapshot.Vibration),
+                snapshot.Vibration,
+                CalibrateTemperature(snapshot.Temperature),
+                snapshot.Temperature,
+                CalibrateHumidity(snapshot.Humidity),
+                snapshot.Humidity);
+
+            ActivityLogStore.Instance.Add("Sensor", "system", eventText, "INFO");
         }
 
         private void ApplyStaleSnapshot(SensorTrainerSnapshot snapshot)
@@ -601,13 +694,7 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             SetSensorStale(Sensors[2]);
             SetSensorStale(Sensors[3]);
 
-            SetDigitalInputs(
-                snapshot.DigitalInput1,
-                snapshot.DigitalInput2,
-                snapshot.DigitalInput3,
-                snapshot.DigitalInput4,
-                snapshot.OpticalSensor,
-                snapshot.InductiveSensor);
+            ApplyDigitalInputAccess(snapshot);
 
             ConnectionStatusText = "STALE";
             ConnectionStatusTone = "Warning";
@@ -709,6 +796,39 @@ namespace WPFSemiconductorEquipmentUI_Sensor.ViewModels
             SetDigitalStatus(digitalInput4, out _digitalInput4Text, out _digitalInput4Tone, "DigitalInput4Text", "DigitalInput4Tone");
             SetDigitalStatus(opticalSensor, out _opticalSensorText, out _opticalSensorTone, "OpticalSensorText", "OpticalSensorTone");
             SetDigitalStatus(inductiveSensor, out _inductiveSensorText, out _inductiveSensorTone, "InductiveSensorText", "InductiveSensorTone");
+        }
+
+        private void ApplyDigitalInputAccess(SensorTrainerSnapshot snapshot)
+        {
+            if (!IsControlEnabled)
+            {
+                SetDigitalInputsLocked();
+                return;
+            }
+
+            if (!_isAdmin)
+            {
+                SetDigitalStatus(snapshot.DigitalInput1, out _digitalInput1Text, out _digitalInput1Tone, "DigitalInput1Text", "DigitalInput1Tone");
+                SetDigitalStatus(snapshot.DigitalInput2, out _digitalInput2Text, out _digitalInput2Tone, "DigitalInput2Text", "DigitalInput2Tone");
+                SetOperatorDigitalInputsLocked();
+                SetDigitalStatus(snapshot.OpticalSensor, out _opticalSensorText, out _opticalSensorTone, "OpticalSensorText", "OpticalSensorTone");
+                SetDigitalStatus(snapshot.InductiveSensor, out _inductiveSensorText, out _inductiveSensorTone, "InductiveSensorText", "InductiveSensorTone");
+                return;
+            }
+
+            SetDigitalInputs(
+                snapshot.DigitalInput1,
+                snapshot.DigitalInput2,
+                snapshot.DigitalInput3,
+                snapshot.DigitalInput4,
+                snapshot.OpticalSensor,
+                snapshot.InductiveSensor);
+        }
+
+        private void SetOperatorDigitalInputsLocked()
+        {
+            SetDigitalStatusLocked(out _digitalInput3Text, out _digitalInput3Tone, "DigitalInput3Text", "DigitalInput3Tone");
+            SetDigitalStatusLocked(out _digitalInput4Text, out _digitalInput4Tone, "DigitalInput4Text", "DigitalInput4Tone");
         }
 
         private void SetDigitalStatus(bool isOn, out string textField, out string toneField, string textPropertyName, string tonePropertyName)

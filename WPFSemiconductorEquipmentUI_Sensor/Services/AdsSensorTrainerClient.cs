@@ -118,6 +118,57 @@ namespace WPFSemiconductorEquipmentUI_Sensor.Services
             }
         }
 
+        public void SetWarningOutputs(bool warningOn, bool riskOn)
+        {
+            ThrowIfDisposed();
+
+            using (var adsClient = new TcAdsClient())
+            {
+                var digitalOutputHandle = 0;
+
+                try
+                {
+                    adsClient.Timeout = AdsTimeoutMilliseconds;
+                    adsClient.Connect(DefaultAdsPort);
+                    digitalOutputHandle = adsClient.CreateVariableHandle(DigitalOutputVariable);
+
+                    var rawOutput = (DigitalOutputRaw)adsClient.ReadAny(digitalOutputHandle, typeof(DigitalOutputRaw));
+                    rawOutput.Bits = SetBit(rawOutput.Bits, 1, warningOn);
+                    rawOutput.Bits = SetBit(rawOutput.Bits, 2, riskOn);
+                    adsClient.WriteAny(digitalOutputHandle, rawOutput);
+                }
+                finally
+                {
+                    TryDeleteHandle(adsClient, digitalOutputHandle);
+                }
+            }
+        }
+
+        public void DisableOperatorRestrictedOutputs()
+        {
+            ThrowIfDisposed();
+
+            using (var adsClient = new TcAdsClient())
+            {
+                var digitalOutputHandle = 0;
+
+                try
+                {
+                    adsClient.Timeout = AdsTimeoutMilliseconds;
+                    adsClient.Connect(DefaultAdsPort);
+                    digitalOutputHandle = adsClient.CreateVariableHandle(DigitalOutputVariable);
+
+                    var rawOutput = (DigitalOutputRaw)adsClient.ReadAny(digitalOutputHandle, typeof(DigitalOutputRaw));
+                    rawOutput.Bits = (ushort)(rawOutput.Bits & ~(1 << 2) & ~(1 << 3));
+                    adsClient.WriteAny(digitalOutputHandle, rawOutput);
+                }
+                finally
+                {
+                    TryDeleteHandle(adsClient, digitalOutputHandle);
+                }
+            }
+        }
+
         public void Dispose()
         {
             _disposed = true;
@@ -126,6 +177,13 @@ namespace WPFSemiconductorEquipmentUI_Sensor.Services
         private static bool IsBitSet(ushort value, int bit)
         {
             return (value & (1 << bit)) != 0;
+        }
+
+        private static ushort SetBit(ushort value, int bit, bool isOn)
+        {
+            return isOn
+                ? (ushort)(value | (1 << bit))
+                : (ushort)(value & ~(1 << bit));
         }
 
         private static void TryDeleteHandle(TcAdsClient adsClient, int handle)

@@ -6,5 +6,6 @@ namespace WPFSemiconductorEquipmentUI_Sensor.Models
         public string Password { get; set; }
         public string Department { get; set; }
         public string ApprovalStatus { get; set; }
+        public string Role { get; set; }
     }
 }
